@@ -1,0 +1,91 @@
+var SS = SpreadsheetApp.openById('1lDFbqg_yodMeab-RpuDVevaxUMKKZUDUgnA6iQMx6yw');
+var timezone = "Asia/Manila";
+
+function doPost(e) {
+  var parsedData;
+  var result = {};
+
+  try {
+    parsedData = JSON.parse(e.postData.contents);
+  } catch (f) {
+    return ContentService.createTextOutput("Error in parsing request body: " + f.message);
+  }
+
+  if (!parsedData || !parsedData.sheet_name || !parsedData.values) {
+    return ContentService.createTextOutput("Error: Missing required fields.");
+  }
+
+  var sheet = SS.getSheetByName(parsedData.sheet_name);
+  if (!sheet) {
+    return ContentService.createTextOutput("Error: Sheet '" + parsedData.sheet_name + "' not found.");
+  }
+
+  // Ensure 'values' is an array
+  if (!Array.isArray(parsedData.values)) {
+    return ContentService.createTextOutput("Error: 'values' must be an array.");
+  }
+
+  var dataArr = parsedData.values; // Corrected variable name
+
+  if (dataArr.length < 5) { // Adjust based on minimum expected fields
+    return ContentService.createTextOutput("Error: Incorrect data format. Expecting at least 5 values.");
+  }
+
+  var Curr_Date = Utilities.formatDate(new Date(), timezone, "MM/dd/yyyy");
+  var Curr_Time = Utilities.formatDate(new Date(), timezone, "hh:mm:ss a");
+
+  var value0 = dataArr[0] || "";  // ID
+  var value1 = dataArr[1] || "";  // First Name
+  var value2 = dataArr[2] || "";  // Last Name
+  var value3 = dataArr[3] || "";  // Phone Number
+  var value4 = dataArr[4] || "";  // Address
+  var value5 = dataArr[5] || "";  // Gate Number (if available)
+
+  // Check for existing Student ID
+  var data = sheet.getDataRange().getValues();
+  var row_number = 0;
+  var time_out = "";
+
+  for (var i = 0; i < data.length; i++) {
+    if (data[i][0] == value0) {
+      row_number = i + 1;
+      time_out = data[i][2];  // Assuming Time-Out is in column C
+      break;
+    }
+  }
+
+  if (row_number > 0 && time_out === "") {
+    sheet.getRange("C" + row_number).setValue(Curr_Time);
+    return ContentService.createTextOutput("Success: Time-Out recorded.");
+  } else if (time_out !== "") {
+    return ContentService.createTextOutput("Error: Time-Out already recorded.");
+  }
+
+  var isDuplicate = data.some(row => row[0] == value0);
+  if (isDuplicate) {
+    return ContentService.createTextOutput("Error: ID already exists.");
+  }
+
+  switch (parsedData.command) {
+    case "insert_row":
+      sheet.insertRows(2);
+      sheet.getRange("A2").setValue(value0);
+      sheet.getRange("B2").setValue(Curr_Time);
+      sheet.getRange("D2").setValue(value5);
+      sheet.getRange("E2").setValue(Curr_Date);
+      sheet.getRange("F2").setValue(value1);
+      sheet.getRange("G2").setValue(value2);
+      sheet.getRange("H2").setValue(value3);
+      sheet.getRange("I2").setValue(value4);
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput("Success: New record inserted.");
+
+    case "append_row":
+      sheet.appendRow([value0, Curr_Time, '', value5, Curr_Date, value1, value2, value3, value4]);
+      SpreadsheetApp.flush();
+      return ContentService.createTextOutput("Success: Row appended.");
+
+    default:
+      return ContentService.createTextOutput("Error: Unknown command '" + parsedData.command + "'.");
+  }
+}
